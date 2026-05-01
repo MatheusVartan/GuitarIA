@@ -20,7 +20,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\guitaria-api\guitaria-api.csproj" />
+    <ProjectReference Include="..\src\guitaria-api.csproj" />
   </ItemGroup>
 
 </Project>
