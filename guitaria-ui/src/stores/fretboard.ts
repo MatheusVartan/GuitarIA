@@ -58,6 +58,11 @@ export const useFretboardStore = defineStore('fretboard', () => {
     return engine.getChordMatches()
   })
 
+  const snapshot = computed(() => {
+    syncEngine()
+    return engine.toSnapshot()
+  })
+
   const tuningPresets = TUNING_PRESETS
 
   // ─── Actions ───────────────────────────────────────────────────────────────
@@ -105,7 +110,7 @@ export const useFretboardStore = defineStore('fretboard', () => {
     root, patternMode, scaleType, chordType, arpeggioType,
     displayMode, position, capo, tuning, handedness,
     // computed
-    noteGrid, scalePositions, chordMatches, tuningPresets,
+    noteGrid, scalePositions, chordMatches, tuningPresets, snapshot,
     // actions
     setRoot, setPatternMode, setScaleType, setChordType, setArpeggioType,
     setDisplayMode, setPosition, setCapo, setTuning, setTuningPreset,
