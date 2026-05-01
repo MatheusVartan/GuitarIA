@@ -17,4 +17,12 @@ public class AgUiEventTests
         var result = AgUiEvent.RunFinished();
         Assert.Equal("event: RUN_FINISHED\ndata: {}\n\n", result);
     }
+
+    [Fact]
+    public void RunFinished_WithSessionId_IncludesSessionId()
+    {
+        var id = new Guid("12345678-1234-1234-1234-123456789012");
+        var result = AgUiEvent.RunFinished(id);
+        Assert.Equal("event: RUN_FINISHED\ndata: {\"sessionId\":\"12345678-1234-1234-1234-123456789012\"}\n\n", result);
+    }
 }
