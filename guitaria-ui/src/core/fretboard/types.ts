@@ -59,3 +59,34 @@ export interface ChordMatch {
   inversion: number
   bassNote: NoteSharp
 }
+
+export interface FretboardSnapshot {
+  // Core state
+  root: NoteSharp
+  patternMode: PatternMode
+
+  // Pattern specifics — only the active mode's field is set
+  scaleType?: ScaleType
+  chordType?: ChordType
+  arpeggioType?: ArpeggioType
+
+  // View options
+  position: 1 | 2 | 3 | 4 | 5 | 'all'
+  displayMode: DisplayMode
+
+  // Instrument config
+  tuning: NoteSharp[]
+  tuningName: string | null   // e.g. "Standard (EADGBe)", null if custom
+  capo: number
+  handedness: Handedness
+
+  // Unique note names currently highlighted on the neck (sorted by pitch class)
+  activeNotes: NoteSharp[]
+
+  // Identify mode only — populated when the student has tapped cells
+  selectedNotes?: NoteSharp[]
+  chordMatches?: ChordMatch[]
+
+  // One-line human-readable description for the AI system prompt
+  summary: string
+}

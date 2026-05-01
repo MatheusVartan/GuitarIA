@@ -5,7 +5,7 @@ import {
 import type {
   NoteSharp, CellData, FretGrid, PatternMode, DisplayMode,
   ScaleType, ChordType, ArpeggioType, Handedness, FretCell,
-  ScalePosition, ChordMatch, TuningPreset,
+  ScalePosition, ChordMatch, TuningPreset, FretboardSnapshot,
 } from './types'
 
 export const TUNING_PRESETS: TuningPreset[] = [
@@ -154,6 +154,55 @@ export class FretboardEngine {
     this.userSelectedCells.clear()
   }
 
+  // ─── Snapshot (for AI system prompt) ─────────────────────────────────────
+
+  toSnapshot(): FretboardSnapshot {
+    const patternIndices = this._getPatternNoteIndices()
+    const activeNotes: NoteSharp[] = [...patternIndices]
+      .sort((a, b) => a - b)
+      .map(i => SHARPS[i])
+
+    // Identify mode: derive selected notes and chord matches from tapped cells
+    let selectedNotes: NoteSharp[] | undefined
+    let chordMatches: ChordMatch[] | undefined
+    if (this.patternMode === 'identify' && this.userSelectedCells.size > 0) {
+      const noteSet = new Set<NoteSharp>()
+      for (const key of this.userSelectedCells) {
+        const [s, f] = key.split('-').map(Number)
+        const noteIdx = (noteIndex(this.tuning[s]) + f + this.capo) % 12
+        noteSet.add(SHARPS[noteIdx])
+      }
+      selectedNotes = [...noteSet]
+      chordMatches = this.getChordMatches()
+    }
+
+    const tuningName = TUNING_PRESETS.find(
+      p => p.notes.every((n, i) => n === this.tuning[i]),
+    )?.name ?? null
+
+    const snapshot: FretboardSnapshot = {
+      root:        this.root,
+      patternMode: this.patternMode,
+      position:    this.position,
+      displayMode: this.displayMode,
+      tuning:      [...this.tuning],
+      tuningName,
+      capo:        this.capo,
+      handedness:  this.handedness,
+      activeNotes,
+      summary:     '',
+    }
+
+    if (this.patternMode === 'scale')    snapshot.scaleType    = this.scaleType
+    if (this.patternMode === 'chord')    snapshot.chordType    = this.chordType
+    if (this.patternMode === 'arpeggio') snapshot.arpeggioType = this.arpeggioType
+    if (selectedNotes !== undefined)     snapshot.selectedNotes = selectedNotes
+    if (chordMatches  !== undefined)     snapshot.chordMatches  = chordMatches
+
+    snapshot.summary = _buildSnapshotSummary(snapshot)
+    return snapshot
+  }
+
   // ─── Note lookup (for audio) ──────────────────────────────────────────────
 
   getNoteForCell(cell: FretCell): { name: NoteSharp; octave: number; midi: number } {
@@ -170,4 +219,66 @@ export class FretboardEngine {
 
     return { name: SHARPS[noteIdx], octave, midi: midiNote }
   }
+}
+
+// ─── Snapshot helpers (module-private) ──────────────────────────────────────
+
+function _buildSnapshotSummary(s: FretboardSnapshot): string {
+  const capo   = s.capo > 0                                    ? ` (capo ${s.capo})`   : ''
+  const tuning = s.tuningName && s.tuningName !== 'Standard (EADGBe)' ? ` [${s.tuningName}]` : ''
+  const hand   = s.handedness === 'left'                       ? ' [left-handed]'      : ''
+
+  switch (s.patternMode) {
+    case 'scale': {
+      const pos = s.position === 'all' ? 'all positions' : `position ${s.position}`
+      return `${s.root} ${_scaleLabel(s.scaleType!)} — ${pos}${capo}${tuning}${hand}`
+    }
+    case 'chord':
+      return `${s.root} ${_chordLabel(s.chordType!)} chord${capo}${tuning}${hand}`
+    case 'arpeggio':
+      return `${s.root} ${_chordLabel(s.arpeggioType!)} arpeggio${capo}${tuning}${hand}`
+    case 'free':
+      return `Free exploration — all notes visible${capo}${tuning}${hand}`
+    case 'identify': {
+      if (!s.selectedNotes?.length)
+        return `Identify mode — no notes selected${capo}${tuning}${hand}`
+      const notes = s.selectedNotes.join(', ')
+      if (!s.chordMatches?.length)
+        return `Identify mode — [${notes}] — no chord matched${capo}${tuning}${hand}`
+      return `Identify mode — [${notes}] → ${s.chordMatches[0].name}${capo}${tuning}${hand}`
+    }
+  }
+}
+
+function _scaleLabel(t: ScaleType): string {
+  const map: Record<ScaleType, string> = {
+    major:            'Major',
+    minor:            'Minor',
+    pentatonic_major: 'Pentatonic Major',
+    pentatonic_minor: 'Pentatonic Minor',
+    blues:            'Blues',
+    dorian:           'Dorian',
+    phrygian:         'Phrygian',
+    lydian:           'Lydian',
+    mixolydian:       'Mixolydian',
+    locrian:          'Locrian',
+    harmonic_minor:   'Harmonic Minor',
+    melodic_minor:    'Melodic Minor',
+    chromatic:        'Chromatic',
+  }
+  return map[t] ?? t
+}
+
+function _chordLabel(t: ChordType | ArpeggioType): string {
+  const map: Record<string, string> = {
+    maj:   'Major',    min:   'Minor',
+    dim:   'Diminished', aug: 'Augmented',
+    maj7:  'Major 7',  min7: 'Minor 7',
+    dom7:  'Dominant 7', dim7: 'Diminished 7',
+    m7b5:  'Half-dim (m7♭5)',
+    maj9:  'Major 9',  min9: 'Minor 9',  dom9: 'Dominant 9',
+    add9:  'Add9',     sus2: 'Sus2',     sus4: 'Sus4',
+    power: 'Power (5th)',
+  }
+  return map[t] ?? t
 }
