@@ -1,0 +1,10 @@
+namespace GuitariaApi.Streaming;
+
+public static class AgUiEvent
+{
+    public static string TextMessageContent(string messageId, string delta) =>
+        $"event: TEXT_MESSAGE_CONTENT\ndata: {{\"messageId\":\"{messageId}\",\"delta\":\"{delta}\"}}\n\n";
+
+    public static string RunFinished() =>
+        "event: RUN_FINISHED\ndata: {}\n\n";
+}
