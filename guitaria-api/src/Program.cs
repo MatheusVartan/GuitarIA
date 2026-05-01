@@ -1,4 +1,5 @@
 using GuitariaApi.Data;
+using GuitariaApi.Services;
 using GuitariaApi.Tools;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
@@ -14,6 +15,7 @@ builder.Services.AddSingleton<IChatClient>(_ =>
     new OpenAIClient(builder.Configuration["OpenAI:ApiKey"]!)
         .GetChatClient("gpt-4o-mini")
         .AsIChatClient());
+builder.Services.AddScoped<LessonAgentService>();
 
 var app = builder.Build();
 
