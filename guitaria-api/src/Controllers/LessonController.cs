@@ -1,5 +1,3 @@
-using System.Text;
-using System.Text.Json;
 using GuitariaApi.Data;
 using GuitariaApi.Models;
 using GuitariaApi.Services;
@@ -10,10 +8,8 @@ namespace GuitariaApi.Controllers;
 
 [ApiController]
 [Route("lesson")]
-public class LessonController(LessonAgentService agentService, AppDbContext db) : ControllerBase
+public class LessonController(LessonAgentService agentService, SessionStore sessionStore, AppDbContext db) : ControllerBase
 {
-    private static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web);
-
     [HttpPost("run")]
     public async Task Run([FromBody] RunLessonRequest request, CancellationToken ct)
     {
@@ -21,35 +17,33 @@ public class LessonController(LessonAgentService agentService, AppDbContext db) 
         Response.Headers["Cache-Control"] = "no-cache";
         Response.Headers["X-Accel-Buffering"] = "no";
 
-        var session = request.SessionId.HasValue
+        var dbSession = request.SessionId.HasValue
             ? await db.LessonSessions.FindAsync([request.SessionId.Value], ct)
             : null;
 
-        var isNew = session is null;
-        session ??= new LessonSession();
+        var isNew = dbSession is null;
+        dbSession ??= new LessonSession();
 
-        var history = JsonSerializer.Deserialize<List<MessageDto>>(session.MessagesJson, JsonOpts) ?? [];
+        var agentSession = await agentService.GetOrCreateSessionAsync(
+            isNew ? null : dbSession.Id, ct);
+
+        if (isNew)
+        {
+            db.LessonSessions.Add(dbSession);
+            await db.SaveChangesAsync(ct);
+        }
+
+        sessionStore.Store(dbSession.Id, agentSession);
 
         var messageId = Guid.NewGuid().ToString();
-        var fullResponse = new StringBuilder();
 
-        await foreach (var delta in agentService.StreamResponseAsync(request, history, ct))
+        await foreach (var delta in agentService.StreamResponseAsync(request, agentSession, ct))
         {
-            fullResponse.Append(delta);
             await Response.WriteAsync(AgUiEvent.TextMessageContent(messageId, delta), ct);
             await Response.Body.FlushAsync(ct);
         }
 
-        history.Add(new MessageDto("user", request.Message));
-        history.Add(new MessageDto("assistant", fullResponse.ToString()));
-        session.MessagesJson = JsonSerializer.Serialize(history, JsonOpts);
-
-        if (isNew)
-            db.LessonSessions.Add(session);
-
-        await db.SaveChangesAsync(ct);
-
-        await Response.WriteAsync(AgUiEvent.RunFinished(session.Id), ct);
+        await Response.WriteAsync(AgUiEvent.RunFinished(dbSession.Id), ct);
         await Response.Body.FlushAsync(ct);
     }
 }
