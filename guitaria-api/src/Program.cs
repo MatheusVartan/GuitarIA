@@ -12,9 +12,12 @@ builder.Services.AddDbContext<AppDbContext>(opts =>
     opts.UseNpgsql(builder.Configuration.GetConnectionString("Default")));
 builder.Services.AddSingleton<IEnumerable<ILessonTool>>([]);
 builder.Services.AddSingleton<IChatClient>(_ =>
-    new OpenAIClient(builder.Configuration["OpenAI:ApiKey"]!)
-        .GetChatClient("gpt-4o-mini")
-        .AsIChatClient());
+    new OpenAIClient(
+        new System.ClientModel.ApiKeyCredential(builder.Configuration["Gemini:ApiKey"]!),
+        new OpenAIClientOptions { Endpoint = new Uri("https://generativelanguage.googleapis.com/v1beta/openai/") }
+    )
+    .GetChatClient("gemini-2.0-flash")
+    .AsIChatClient());
 builder.Services.AddScoped<LessonAgentService>();
 
 var app = builder.Build();
