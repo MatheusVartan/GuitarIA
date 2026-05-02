@@ -1,34 +1,71 @@
+<script setup lang="ts">
+import { ref, nextTick, watch } from 'vue'
+import { useLessonStore } from '@/stores/lesson'
+import { useAgUiStream } from '@/composables/useAgUiStream'
+
+const lessonStore = useLessonStore()
+const { sendMessage } = useAgUiStream()
+
+const input = ref('')
+const messagesEl = ref<HTMLElement | null>(null)
+
+async function submit() {
+  const msg = input.value.trim()
+  if (!msg || lessonStore.isStreaming) return
+  input.value = ''
+  await sendMessage(msg)
+}
+
+watch(
+  () => lessonStore.messages.length,
+  async () => {
+    await nextTick()
+    messagesEl.value?.scrollTo({ top: messagesEl.value.scrollHeight, behavior: 'smooth' })
+  }
+)
+</script>
+
 <template>
   <aside class="sidebar">
     <div class="sidebar-header">
       <span class="sidebar-title">Professor</span>
-      <span class="sidebar-badge">em breve</span>
+      <span v-if="lessonStore.isStreaming" class="sidebar-badge streaming">digitando</span>
+      <span v-else class="sidebar-badge">IA</span>
     </div>
 
-    <div class="chat-area">
-      <div class="placeholder-msg">
-        O professor AI estará disponível na Fase 2
+    <div class="chat-area" ref="messagesEl">
+      <div v-if="lessonStore.messages.length === 0" class="placeholder-msg">
+        Faça uma pergunta ao professor de guitarra.
+      </div>
+      <div
+        v-for="(msg, i) in lessonStore.messages"
+        :key="i"
+        :class="['message', msg.role]"
+      >
+        <span class="content">{{ msg.content }}<span v-if="msg.streaming" class="cursor">▋</span></span>
       </div>
     </div>
 
-    <div class="chat-input-area">
-      <div class="chat-input-box">
-        <span class="chat-placeholder">Mensagem para o professor...</span>
-        <button class="send-btn" disabled>↑</button>
+    <form class="chat-input-area" @submit.prevent="submit">
+      <div class="chat-input-box" :class="{ active: !lessonStore.isStreaming }">
+        <input
+          v-model="input"
+          type="text"
+          class="chat-input"
+          placeholder="Mensagem para o professor..."
+          :disabled="lessonStore.isStreaming"
+          autocomplete="off"
+        />
+        <button type="submit" class="send-btn" :disabled="lessonStore.isStreaming || !input.trim()">↑</button>
       </div>
-    </div>
+    </form>
   </aside>
 </template>
 
-<script setup lang="ts">
-// Sem lógica na Fase 1 — componente estático
-// Na Fase 2: recebe mensagens via SignalR e expõe slot de chat
-</script>
-
 <style scoped>
 .sidebar {
-  width: 220px;
-  min-width: 220px;
+  width: 280px;
+  min-width: 280px;
   background: var(--bg-surface);
   border-left: 1px solid var(--border);
   display: flex;
@@ -63,12 +100,24 @@
   padding: 1px 5px;
 }
 
+.sidebar-badge.streaming {
+  color: var(--scale);
+  border-color: var(--scale);
+  animation: pulse 1s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
 .chat-area {
   flex: 1;
+  overflow-y: auto;
+  padding: 12px;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px 16px;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .placeholder-msg {
@@ -79,6 +128,50 @@
   border: 1px dashed var(--border);
   border-radius: 6px;
   padding: 14px 12px;
+  margin: auto 0;
+}
+
+.message {
+  display: flex;
+  max-width: 95%;
+}
+
+.message.student {
+  align-self: flex-end;
+}
+
+.message.teacher {
+  align-self: flex-start;
+}
+
+.content {
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 6px 10px;
+  border-radius: 6px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.message.student .content {
+  background: var(--root);
+  color: var(--bg);
+}
+
+.message.teacher .content {
+  background: var(--bg-raised);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.cursor {
+  color: var(--scale);
+  animation: blink 0.8s step-end infinite;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
 }
 
 .chat-input-area {
@@ -96,14 +189,30 @@
   align-items: center;
   padding: 0 8px;
   gap: 6px;
-  opacity: 0.4;
+  transition: border-color 0.15s;
 }
 
-.chat-placeholder {
+.chat-input-box.active:focus-within {
+  border-color: var(--border-lit);
+}
+
+.chat-input {
   flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
   font-size: 11px;
+  color: var(--text);
+  font-family: inherit;
+}
+
+.chat-input::placeholder {
   color: var(--muted);
   font-style: italic;
+}
+
+.chat-input:disabled {
+  opacity: 0.5;
 }
 
 .send-btn {
@@ -114,9 +223,22 @@
   border: 1px solid var(--border);
   color: var(--muted);
   font-size: 11px;
-  cursor: not-allowed;
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: background 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+
+.send-btn:not(:disabled) {
+  background: var(--root);
+  color: var(--bg);
+  border-color: var(--root);
+  cursor: pointer;
+}
+
+.send-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
 }
 </style>
